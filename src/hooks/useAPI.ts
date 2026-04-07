@@ -6,6 +6,7 @@ import { getAuthToken } from "../utils/auth";
  * @author Ankur Mundra on April, 2023
  */
 
+
 axios.defaults.baseURL = "http://localhost:3002";
 axios.defaults.headers.common["Accept"] = "application/json";
 axios.defaults.headers.post["Content-Type"] = "application/json";
@@ -14,17 +15,25 @@ axios.defaults.headers.patch["Content-Type"] = "application/json";
 
 const useAPI = () => {
   const [data, setData] = useState<AxiosResponse>();
-  const [error, setError] = useState<string>("");
+  const [error, setError] = useState<string | null>("");
+  const [errorStatus, setErrorStatus] = useState<string | null>("");
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   // Learn about Axios Request Config at https://github.com/axios/axios#request-config
-  const sendRequest = useCallback((requestConfig: AxiosRequestConfig) => {
+  const sendRequest = useCallback((requestConfig: AxiosRequestConfig & { transformRequest?: (data: any) => any }) => {
     const token = getAuthToken();
     if (token) {
       requestConfig.headers = {
         ...requestConfig.headers,
         Authorization: `Bearer ${token}`,
       };
+    }
+
+    // Apply transformRequest if provided
+    if (requestConfig.transformRequest && requestConfig.data) {
+      requestConfig.data = requestConfig.transformRequest(requestConfig.data);
+      // Remove the transformRequest from config after using it
+      delete requestConfig.transformRequest;
     }
 
     setIsLoading(true);
@@ -38,7 +47,7 @@ const useAPI = () => {
           const errors = err.response.data;
           const messages = Object.entries(errors).flatMap(([field, messages]) => {
             if (Array.isArray(messages)) return messages.map((m) => `${field} ${m}`);
-            return `${field} ${messages}`;
+            return `${field}: ${messages}`;
           });
           errorMessage = messages.join(", ");
         } else if (err.request) {
@@ -51,11 +60,23 @@ const useAPI = () => {
         }
 
         if (errorMessage) setError(errorMessage);
+        if (err.status) setErrorStatus(err.status)
+      })
+      .finally(() => {
+        setIsLoading(false);
       });
-    setIsLoading(false);
   }, []);
 
-  return { data, setData, isLoading, error, sendRequest };
+  const reset = (error: boolean, data: boolean) => {
+    if (error) {
+      setError(null);
+    }
+    if (data) {
+      setData(undefined);
+    }
+  };
+
+  return { data, setData, isLoading, error, sendRequest, reset, errorStatus };
 };
 
 export default useAPI;
